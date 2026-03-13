@@ -27,10 +27,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/float32.hpp"
-
-#include "clearpath_platform_msgs/msg/power.hpp"
-#include "clearpath_platform_msgs/msg/status.hpp"
-#include "clearpath_platform_msgs/msg/stop_status.hpp"
+#include "husky_msgs/msg/husky_status.hpp"
 
 namespace a200_status
 {
@@ -41,26 +38,14 @@ class A200Status
   public:
   explicit A200Status();
 
-  void publish_power(const clearpath_platform_msgs::msg::Power & power_msg);
-  void publish_status(const clearpath_platform_msgs::msg::Status & status_msg);
-  void publish_stop_status(const clearpath_platform_msgs::msg::StopStatus & stop_status_msg);
-  void publish_stop_state(const std_msgs::msg::Bool & stop_msg);
-  void publish_temps(const std_msgs::msg::Float32 & driver_left_msg,
-        const std_msgs::msg::Float32 & driver_right_msg,
-        const std_msgs::msg::Float32 & motor_left_msg,
-        const std_msgs::msg::Float32 & motor_right_msg);
+  void publish_status(husky_msgs::msg::HuskyStatus status_msg);
 
   private:
-  rclcpp::Publisher<clearpath_platform_msgs::msg::Power>::SharedPtr pub_power_;
-  rclcpp::Publisher<clearpath_platform_msgs::msg::Status>::SharedPtr pub_status_;
-  rclcpp::Publisher<clearpath_platform_msgs::msg::StopStatus>::SharedPtr pub_stop_status_;
-  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_stop_state_;
-  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr pub_driver_left_temp_;
-  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr pub_driver_right_temp_;
-  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr pub_motor_left_temp_;
-  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr pub_motor_right_temp_;
+  rclcpp::Publisher<husky_msgs::msg::HuskyStatus>::SharedPtr pub_status_;
+
 };
 
-}
+}  // namespace a200_status
+
 
 #endif  // CLEARPATH_HARDWARE_INTERFACES__A200_STATUS_HPP

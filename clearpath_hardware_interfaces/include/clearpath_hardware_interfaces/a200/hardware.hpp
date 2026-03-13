@@ -24,6 +24,8 @@
 #include "clearpath_platform_msgs/msg/power.hpp"
 #include "clearpath_platform_msgs/msg/status.hpp"
 #include "clearpath_platform_msgs/msg/stop_status.hpp"
+#include "husky_msgs/msg/husky_status.hpp"
+
 
 using namespace std::chrono_literals;
 
@@ -78,12 +80,7 @@ private:
   uint8_t left_cmd_joint_index_, right_cmd_joint_index_;
 
   std::shared_ptr<a200_status::A200Status> status_node_;
-  clearpath_platform_msgs::msg::Power power_msg_;
-  clearpath_platform_msgs::msg::Status status_msg_;
-  clearpath_platform_msgs::msg::StopStatus stop_status_msg_;
-  std_msgs::msg::Bool stop_msg_;
-  std_msgs::msg::Float32 driver_left_temp_msg_, driver_right_temp_msg_;
-  std_msgs::msg::Float32 motor_left_temp_msg_, motor_right_temp_msg_;
+  husky_msgs::msg::HuskyStatus status_msg_;
 };
 
 }  // namespace clearpath_hardware_interfaces

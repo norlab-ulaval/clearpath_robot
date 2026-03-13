@@ -213,13 +213,13 @@ namespace clearpath_hardware_interfaces
     {
       uint16_t flags = safety_status->getFlags();
 
-      // status_msg_.timeout = (flags & SAFETY_TIMEOUT) > 0;
-      // status_msg_.lockout = (flags & SAFETY_LOCKOUT) > 0;
-      // status_msg_.ros_pause = (flags & SAFETY_CCI) > 0;
-      // status_msg_.no_battery = (flags & SAFETY_PSU) > 0;
-      // status_msg_.current_limit = (flags & SAFETY_CURRENT) > 0;
-      stop_msg_.data = (flags & SAFETY_ESTOP) > 0;
-      power_msg_.battery_connected = static_cast<int8_t>(!((flags & SAFETY_PSU) > 0));
+      status_msg_.timeout = (flags & SAFETY_TIMEOUT) > 0;
+      status_msg_.lockout = (flags & SAFETY_LOCKOUT) > 0;
+      status_msg_.ros_pause = (flags & SAFETY_CCI) > 0;
+      status_msg_.no_battery = (flags & SAFETY_PSU) > 0;
+      status_msg_.current_limit = (flags & SAFETY_CURRENT) > 0;
+      status_msg_.e_stop = (flags & SAFETY_ESTOP) > 0;
+      status_msg_.battery_connected = static_cast<int8_t>(!((flags & SAFETY_PSU) > 0));
     }
     else
     {
@@ -227,33 +227,37 @@ namespace clearpath_hardware_interfaces
         rclcpp::get_logger(HW_NAME), "Could not get safety_status");
     }
 
+    auto power_status =
+      horizon_legacy::Channel<clearpath::DataPowerSystem>::getLatest(polling_timeout_);
+    if (power_status)
+    {
+      status_msg_.charge_estimate = power_status->getChargeEstimate(0);
+      status_msg_.capacity_estimate = power_status->getCapacityEstimate(0);
+    }
+    else
+    {
+      RCLCPP_ERROR(
+        rclcpp::get_logger(HW_NAME), "Could not get power_status");
+    }
 
     auto system_status =
       horizon_legacy::Channel<clearpath::DataSystemStatus>::getLatest(polling_timeout_);
     if (system_status)
     {
-      int uptime_ms = system_status->getUptime();  // returns milliseconds!
-      status_msg_.mcu_uptime.sec = uptime_ms / 1000;
-      status_msg_.mcu_uptime.nanosec = (uptime_ms - status_msg_.mcu_uptime.sec * 1000) * 1000000;
-      status_msg_.connection_uptime.sec = status_msg_.mcu_uptime.sec;
-      status_msg_.connection_uptime.nanosec = status_msg_.mcu_uptime.nanosec;
+      status_msg_.uptime = system_status->getUptime();  // returns milliseconds!
 
-      power_msg_.shore_power_connected = clearpath_platform_msgs::msg::Power::NOT_APPLICABLE;
-      power_msg_.power_12v_user_nominal = clearpath_platform_msgs::msg::Power::NOT_APPLICABLE;
-      power_msg_.charging_complete  = clearpath_platform_msgs::msg::Power::NOT_APPLICABLE;
+      status_msg_.battery_voltage = system_status->getVoltage(0);
+      status_msg_.left_driver_voltage = system_status->getVoltage(1);
+      status_msg_.right_driver_voltage = system_status->getVoltage(2);
 
-      power_msg_.measured_voltages[clearpath_platform_msgs::msg::Power::A200_BATTERY_VOLTAGE] = system_status->getVoltage(0);
-      power_msg_.measured_voltages[clearpath_platform_msgs::msg::Power::A200_LEFT_DRIVER_VOLTAGE] = system_status->getVoltage(1);
-      power_msg_.measured_voltages[clearpath_platform_msgs::msg::Power::A200_RIGHT_DRIVER_VOLTAGE] = system_status->getVoltage(2);
+      status_msg_.mcu_and_user_port_current = system_status->getCurrent(0);
+      status_msg_.left_driver_current = system_status->getCurrent(1);
+      status_msg_.right_driver_current = system_status->getCurrent(2);
 
-      power_msg_.measured_currents[clearpath_platform_msgs::msg::Power::A200_MCU_AND_USER_PORT_CURRENT] = system_status->getCurrent(0);
-      power_msg_.measured_currents[clearpath_platform_msgs::msg::Power::A200_LEFT_DRIVER_CURRENT] = system_status->getCurrent(1);
-      power_msg_.measured_currents[clearpath_platform_msgs::msg::Power::A200_RIGHT_DRIVER_CURRENT] = system_status->getCurrent(2);
-
-      driver_left_temp_msg_.data = system_status->getTemperature(0);
-      driver_right_temp_msg_.data = system_status->getTemperature(1);
-      motor_left_temp_msg_.data = system_status->getTemperature(2);
-      motor_right_temp_msg_.data = system_status->getTemperature(3);
+      status_msg_.left_driver_temp = system_status->getTemperature(0);
+      status_msg_.right_driver_temp = system_status->getTemperature(1);
+      status_msg_.left_motor_temp = system_status->getTemperature(2);
+      status_msg_.right_motor_temp = system_status->getTemperature(3);
     }
     else
     {
@@ -263,13 +267,8 @@ namespace clearpath_hardware_interfaces
 
     status_msg_.header.frame_id = "base_link";
     status_msg_.header.stamp = status_node_->get_clock()->now();
-    status_msg_.firmware_version = "A200";
-    status_msg_.hardware_id = "A200";
 
     status_node_->publish_status(status_msg_);
-    status_node_->publish_power(power_msg_);
-    status_node_->publish_stop_state(stop_msg_);
-    status_node_->publish_temps(driver_left_temp_msg_, driver_right_temp_msg_, motor_left_temp_msg_, motor_right_temp_msg_);
   }
 
 
@@ -311,9 +310,6 @@ hardware_interface::CallbackReturn A200Hardware::on_init(const hardware_interfac
   serial_port_ = info_.hardware_parameters["serial_port"];
 
   status_node_ = std::make_shared<a200_status::A200Status>();
-  // Resize the message to fix the platform model A200
-  power_msg_.measured_voltages.resize(clearpath_platform_msgs::msg::Power::A200_VOLTAGES_SIZE);
-  power_msg_.measured_currents.resize(clearpath_platform_msgs::msg::Power::A200_CURRENTS_SIZE);
 
   RCLCPP_INFO(rclcpp::get_logger(HW_NAME), "Port: %s", serial_port_.c_str());
   horizon_legacy::connect(serial_port_);
@@ -419,6 +415,7 @@ hardware_interface::CallbackReturn A200Hardware::on_activate(const rclcpp_lifecy
   horizon_legacy::Channel<clearpath::DataDifferentialSpeed>::subscribe(20);
   horizon_legacy::Channel<clearpath::DataSafetySystemStatus>::subscribe(20);
   horizon_legacy::Channel<clearpath::DataSystemStatus>::subscribe(20);
+  horizon_legacy::Channel<clearpath::DataPowerSystem>::subscribe(20);
 
   // set some default values
   for (auto i = 0u; i < hw_states_position_.size(); i++)
@@ -445,6 +442,7 @@ hardware_interface::CallbackReturn A200Hardware::on_deactivate(const rclcpp_life
   horizon_legacy::Channel<clearpath::DataDifferentialSpeed>::unsubscribe();
   horizon_legacy::Channel<clearpath::DataSafetySystemStatus>::unsubscribe();
   horizon_legacy::Channel<clearpath::DataSystemStatus>::unsubscribe();
+  horizon_legacy::Channel<clearpath::DataPowerSystem>::unsubscribe();
 
   RCLCPP_INFO(rclcpp::get_logger(HW_NAME), "System successfully stopped!");
 
