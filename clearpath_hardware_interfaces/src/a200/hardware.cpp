@@ -140,7 +140,7 @@ namespace clearpath_hardware_interfaces
   {
 
     horizon_legacy::Channel<clearpath::DataEncoders>::Ptr enc =
-      horizon_legacy::Channel<clearpath::DataEncoders>::requestData(polling_timeout_);
+      horizon_legacy::Channel<clearpath::DataEncoders>::getLatest(polling_timeout_);
     if (enc)
     {
       RCLCPP_DEBUG(
@@ -174,7 +174,7 @@ namespace clearpath_hardware_interfaces
     }
 
     horizon_legacy::Channel<clearpath::DataDifferentialSpeed>::Ptr speed =
-      horizon_legacy::Channel<clearpath::DataDifferentialSpeed>::requestData(polling_timeout_);
+      horizon_legacy::Channel<clearpath::DataDifferentialSpeed>::getLatest(polling_timeout_);
     if (speed)
     {
       RCLCPP_DEBUG(
@@ -208,7 +208,7 @@ namespace clearpath_hardware_interfaces
   {
 
     auto safety_status =
-      horizon_legacy::Channel<clearpath::DataSafetySystemStatus>::requestData(polling_timeout_);
+      horizon_legacy::Channel<clearpath::DataSafetySystemStatus>::getLatest(polling_timeout_);
     if (safety_status)
     {
       uint16_t flags = safety_status->getFlags();
@@ -229,7 +229,7 @@ namespace clearpath_hardware_interfaces
 
 
     auto system_status =
-      horizon_legacy::Channel<clearpath::DataSystemStatus>::requestData(polling_timeout_);
+      horizon_legacy::Channel<clearpath::DataSystemStatus>::getLatest(polling_timeout_);
     if (system_status)
     {
       int uptime_ms = system_status->getUptime();  // returns milliseconds!
@@ -415,6 +415,11 @@ hardware_interface::CallbackReturn A200Hardware::on_activate(const rclcpp_lifecy
 {
   RCLCPP_INFO(rclcpp::get_logger(HW_NAME), "Starting ...please wait...");
 
+  horizon_legacy::Channel<clearpath::DataEncoders>::subscribe(20);
+  horizon_legacy::Channel<clearpath::DataDifferentialSpeed>::subscribe(20);
+  horizon_legacy::Channel<clearpath::DataSafetySystemStatus>::subscribe(20);
+  horizon_legacy::Channel<clearpath::DataSystemStatus>::subscribe(20);
+
   // set some default values
   for (auto i = 0u; i < hw_states_position_.size(); i++)
   {
@@ -436,6 +441,11 @@ hardware_interface::CallbackReturn A200Hardware::on_deactivate(const rclcpp_life
 {
   RCLCPP_INFO(rclcpp::get_logger(HW_NAME), "Stopping ...please wait...");
 
+  horizon_legacy::Channel<clearpath::DataEncoders>::unsubscribe();
+  horizon_legacy::Channel<clearpath::DataDifferentialSpeed>::unsubscribe();
+  horizon_legacy::Channel<clearpath::DataSafetySystemStatus>::unsubscribe();
+  horizon_legacy::Channel<clearpath::DataSystemStatus>::unsubscribe();
+
   RCLCPP_INFO(rclcpp::get_logger(HW_NAME), "System successfully stopped!");
 
   return hardware_interface::CallbackReturn::SUCCESS;
@@ -449,17 +459,7 @@ hardware_interface::return_type A200Hardware::read(const rclcpp::Time & /*time*/
 
   RCLCPP_DEBUG(rclcpp::get_logger(HW_NAME), "Joints successfully read!");
 
-  // This will run at 10Hz but status data is only needed at 1Hz.
-  static int i = 0;
-  if (i <= 10)
-  {
-    i++;
-  }
-  else
-  {
-    readStatusFromHardware();
-    i = 0;
-  }
+  readStatusFromHardware();
 
   return hardware_interface::return_type::OK;
 }
